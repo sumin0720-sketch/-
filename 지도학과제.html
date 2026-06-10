@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Web Map Layout with Tmap</title>
+    <script src="https://apis.openapi.sk.com/tmap/vectorjs?version=1&appKey=JPnUAsUBaS4ZHtJuv02sJaVfw9mBnOCZ5Kn41qal"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Header */
+        .header {
+            height: 60px;
+            background: #004b87;
+            color: white;
+
+            display: flex;
+            align-items: center;
+
+            padding: 0 20px;
+
+            box-sizing: border-box;
+        }
+
+        #headerTitle {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        #languageSelect {
+            margin-left: auto;   /* 핵심 */
+            
+            height: 34px;
+            padding: 0 10px;
+
+            border: none;
+            border-radius: 5px;
+
+            background: white;
+            cursor: pointer;
+        }
+
+        /* Main Container */
+        .container {
+            display:flex;
+            height:calc(100vh - 60px);
+            overflow:hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            flex:0 0 30px;
+            min-width: 280px;
+            background: #f8f9fa;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 10;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        .sidebar h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #004b87;
+            padding-bottom: 8px;
+        }
+
+        .notice-box {
+            background-color: #e8f4fd;
+            border-left: 4px solid #1c7ed6;
+            padding: 10px;
+            font-size: 13px;
+            color: #2b2b2b;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        /* Buttons */
+        button {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background-color: #e9ecef;
+        }
+
+        button.primary {
+            background-color: #e7f5ff;
+            color: #1c7ed6;
+            border-color: #a5d8ff;
+        }
+        
+        button.danger {
+            background-color: #fff5f5;
+            color: #e03131;
+            border-color: #ffc9c9;
+        }
+
+        /* Map Area */
+        #map_div {
+            flex:1;
+            height: calc(100vh - 60px);
+            background: #d9d9d9;
+            box-sizing: border-box;
+        }
+        
+        .info-box {
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .language-toggle{
+        margin-left:auto;
+        color:white;
+        font-size:15px;
+        font-weight:bold;
+        user-select:none;
+        }
+
+        .language-toggle span{
+            cursor:pointer;
+            padding:0 4px;
+        }
+
+        .language-toggle span:hover{
+            text-decoration:underline;
+        }
+
+        .active-lang{
+            color:#ffd43b;
+        }
+    </style>
+
+    <script type="text/javascript">
+        // Tmap 지도 객체 불러오기
+        var map;
+        // 병원 마커 저장
+        var hospitalMarkers = [];
+        // 사용자 지정 출발지 마커 
+        var userMarker = null;    // 처음 진입 시 마커 없음 (null)
+        // 지도 경로 저장
+        var routePolylines = [];
+        // 정보창 
+        var currentInfoWindow = null; 
+        // 최단 경로 정보
+        var routeDistance = 0;
+        var routeTime = 0;
+        var carTime = 0;
+
+        var tmapAppKey = "JPnUAsUBaS4ZHtJuv02sJaVfw9mBnOCZ5Kn41qal";
+        
+        // 기본 언어 = 영어, 영어&한국어 사이드바
+        let currentLanguage = "en";
+            
+            const translations = {
+                en: {
+
+                header:
+                "Closest International Healthcare Center Navigation In Seoul",
+
+                guideTitle:
+                "Navigation Guide",
+
+                notice:
+                "📍 <b>How to Use</b><br>" +
+                "1. No starting location is selected by default.<br>" +
+                "2. Right-click on the map to set your starting point.<br>" +
+                "3. Click the button below to find the nearest medical center.",
+
+                findRoute: "🚨 Find Nearest Medical Center",
+
+                showAll: "📋 Show All Hospitals",
+
+                reset: "🔄 Reset Map and Location",
+
+                infoSupport: "Support",
+
+                infoWebsite: "Visit Official Website →",
+
+                mapControl: "Map Controls",
+
+                zoomIn: "Zoom In",
+
+                zoomOut: "Zoom Out",
+
+                darkMode: "Night Mode (Filter)",
+                },
+
+                ko: {
+
+                    header:
+                    "서울 내 국제진료센터 최단 경로 안내",
+
+                    guideTitle:
+                    "대피 경로 안내",
+
+                    notice:
+                    "📍 <b>사용 방법</b><br>" +
+                    "1. 처음 진입 시 내 위치 마커가 없습니다.<br>" +
+                    "2. 지도에서 우클릭하여 출발지를 지정하세요.<br>" +
+                    "3. 아래 버튼을 눌러 가장 가까운 병원을 찾으세요.",
+                    
+                    findRoute: "🚨 실제 도로 기준 최단 병원 찾기",
+
+                    showAll: "📋 전체 지정병원 보기",
+
+                    reset: "🔄 지도 및 위치 전체 초기화",
+
+                    infoSupport: "지원 언어",
+
+                    infoWebsite: "공식 홈페이지 방문 →",
+
+                    mapControl: "지도 제어",
+
+                    zoomIn: "지도 확대",
+
+                    zoomOut: "지도 축소",
+
+                    darkMode: "야간 모드 (필터)",
+                },
+            };
+
+        // 대형병원 데이터
+        var hospitalData = [
+            { name: "Yeouido ST. Mary’s Hospital / 가톨릭대학교 여의도성모병원", lat: 37.518288, lng: 126.936709, lang: "영어, 중국어, 일어", url: "https://www.cmcsungmo.or.kr/en.common.main.main.sp" },
+            { name: "Seoul ST. Mary’s Hospital / 가톨릭대학교 서울성모병원", lat: 37.501620, lng: 127.004763, lang: "영어, 러시아어, 아랍어, 중국어, 프랑스어, 일본어", url: "https://www.cmcseoul.or.kr/eng.common.main.main.sp" },
+            { name: "Severance Hospital / 신촌세브란스병원", lat: 37.562352, lng: 126.940857, lang: "영어, 러시아어, 중국어, 일본어, 몽골어, 아랍어", url: "https://sev.severance.healthcare/sev-en/index.do" },
+            { name: "Gangnam Severance Hospital / 강남세브란스병원", lat: 37.492882, lng: 127.046514, lang: "영어, 러시아어, 아랍어", url: "https://gs.severance.healthcare/gs-en/index.do" },
+            { name: "Asan Medical Center / 서울아산병원", lat: 37.526548, lng: 127.108105, lang: "영어, 중국어, 러시아어, 아랍어, 몽골어, 베트남어, 일본어", url: "https://eng.amc.seoul.kr/gb/lang/main.do" },
+            { name: "Samsung Medical Center / 삼성서울병원", lat: 37.488125, lng: 127.084984, lang: "영어, 러시아어, 중국어, 아랍어, 몽골어, 일본어, 베트남어", url: "https://www.samsunghospital.com/en/" },
+            { name: "Hanyang University Medical Center / 한양대학교병원", lat: 37.559570, lng: 127.043617, lang: "영어, 러시아어, 몽골어", url: "https://www.hyumc.com/eng/main.do" },
+            { name: "Soon Chun Hyang University Hospital Seoul / 순천향대학교 서울병원", lat: 37.533657, lng: 127.004266, lang: "영어, 러시아어, 스페인어, 포르투갈어, 프랑스어", url: "https://international.schmc.ac.kr/seoulEng/index.do" },
+            { name: "Kyung Hee University Medical Center / 경희대학교병원", lat: 37.594085, lng: 127.051828, lang: "영어, 일본어, 중국어, 러시아어, 몽골어", url: "https://www.khmc.or.kr/en/main.do" },
+            { name: "Chung-Ang University Hospital / 중앙대학교병원", lat: 37.506697, lng: 126.960732, lang: "영어, 중국어, 러시아어", url: "https://ch.cauhs.or.kr/eng/" },
+            { name: "Konkuk University Medical Center / 건국대학교병원", lat: 37.540489, lng: 127.071939, lang: "영어, 중국어, 러시아어", url: "https://www.kuh.ac.kr/english/main.do" },
+            { name: "Seoul National University Hospital / 서울대학교병원", lat: 37.579546, lng: 126.999058, lang: "영어, 중국어, 몽골어, 러시아어, 아랍어", url: "https://www.snuh.org/global/en/main.do" },
+            { name: "Ewha Womans University Seoul Hospital / 이대서울병원", lat: 37.557320, lng: 126.836297, lang: "영어, 아랍어, 러시아어, 중국어, 몽골어", url: "https://seoul.eumc.ac.kr/eng/main.do" },
+            { name: "Korea University Anam Hospial / 고려대학교 안암병원", lat: 37.587069, lng: 127.026262, lang: "영어, 러시아어, 아랍어, 몽골어", url: "https://anam.kumc.or.kr/en/index.do" }
+        ];
+
+     // 정보창 언어를 현재 UI에 맞게 변환
+    function convertLanguage(langText){
+
+        // 한국어 모드
+         if(currentLanguage === "ko"){
+             return langText;
+            }
+
+        // 영어 모드
+            const map = {
+                "영어": "English",
+                "러시아어": "Russian",
+                "몽골어": "Mongolian",
+                "중국어": "Chinese",
+                "일어": "Japanese",
+                "일본어": "Japanese",
+                "아랍어": "Arabic",
+                "카자흐어": "Kazakh",
+                "프랑스어": "French",
+                "베트남어": "Vietnamese",
+                "포르투갈어": "Portuguese",
+                "스페인어": "Spanish"
+            };
+
+            let result = langText;
+
+            for(let key in map){
+                result = result.replaceAll(key, map[key]);
+            }
+
+            return result;
+    }
+
+    // UI 언어 변경 함수
+    function changeLanguage(lang){
+
+        currentLanguage = lang;
+
+        document.getElementById("headerTitle").innerText =
+            translations[lang].header;
+
+        document.getElementById("guideTitle").innerText =
+            translations[lang].guideTitle;
+
+        document.getElementById("noticeBox").innerHTML =
+            translations[lang].notice;
+
+        document.getElementById("findRouteBtn").innerText =
+            translations[lang].findRoute;
+
+        document.getElementById("showAllBtn").innerText =
+            translations[lang].showAll;
+
+        document.getElementById("resetBtn").innerText =
+            translations[lang].reset;
+
+        document.getElementById("mapControlTitle").innerText =
+            translations[lang].mapControl;
+
+        document.getElementById("zoomInBtn").innerText =
+            translations[lang].zoomIn;
+
+        document.getElementById("zoomOutBtn").innerText =
+            translations[lang].zoomOut;
+
+        document.getElementById("darkModeBtn").innerText =
+            translations[lang].darkMode;
+
+        if(lang === "en"){
+
+            document.getElementById("langEN")
+                .classList.add("active-lang");
+
+            document.getElementById("langKO")
+                .classList.remove("active-lang");
+
+        }else{
+
+            document.getElementById("langKO")
+                .classList.add("active-lang");
+
+            document.getElementById("langEN")
+                .classList.remove("active-lang");
+
+        }
+    }
+
+        // 정보창 x창
+        function closeInfoWindow(){
+
+            if(currentInfoWindow){
+
+                currentInfoWindow.setMap(null);
+
+                currentInfoWindow = null;
+            }
+        }
+
+        // 사용자의 좌표 초기값 null 설정
+        var userPosition = { lat: null, lng: null };
+
+    function initTmap(){
+
+        map = new Tmapv3.Map("map_div", {
+            center : new Tmapv3.LatLng(37.550000, 126.990000),
+            width : "100%",
+            height : "100%",
+            zoom : 12
+        });
+
+        createHospitalMarkers();
+
+            // 우클릭 메뉴 제거
+            document.getElementById("map_div").addEventListener("contextmenu", function(e){
+                e.preventDefault();
+            });
+
+            // 우클릭으로 출발지 지정
+            document.getElementById("map_div").addEventListener("mousedown", function(e){
+
+                if(e.button !== 2){
+                    return;
+                }
+
+                e.preventDefault();
+
+                const mapRect =
+                    document.getElementById("map_div")
+                    .getBoundingClientRect();
+
+                const x = e.clientX - mapRect.left;
+                const y = e.clientY - mapRect.top;
+
+                try {
+
+                    const coord = map.screenToReal(
+                        new Tmapv3.Point(x, y)
+                    );
+
+                    const lat = coord._lat;
+                    const lng = coord._lng;
+
+                    userPosition.lat = lat;
+                    userPosition.lng = lng;
+
+                    // 기존 출발지 마커 제거
+                    if(userMarker){
+                        userMarker.setMap(null);
+                    }
+
+                    // 새 출발지 마커 생성
+                    userMarker = new Tmapv3.Marker({
+                        position : new Tmapv3.LatLng(lat, lng),
+                        map : map,
+                        title : "출발지"
+                    });
+
+                    clearRouteLines();
+
+                    if(currentInfoWindow){
+                        currentInfoWindow.setMap(null);
+                        currentInfoWindow = null;
+                    }
+
+                    console.log("출발지 지정 완료");
+
+                } catch(err){
+
+                    console.error(err);
+
+                }
+
+            });
+
+        }
+
+        function createHospitalMarkers() {
+            hospitalData.forEach(function(item) {
+                var marker = new Tmapv3.Marker({
+                position: new Tmapv3.LatLng(item.lat, item.lng),
+                title: item.name,
+                map: map,
+
+                icon: "hospital.png",
+
+                iconSize: new Tmapv3.Size(
+                    30, 30
+                )
+                });
+
+                marker.on("click", function() {
+
+                    if(currentInfoWindow){
+                        currentInfoWindow.setMap(null);
+                    }
+
+                    const content = `
+                        <div class="info-box">
+
+                            <div style="
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:center;
+                            ">
+
+                                <strong style="
+                                    color:#004b87;
+                                    font-size:14px;
+                                ">
+                                    ${item.name}
+                                </strong>
+
+                                <span
+                                    onclick="closeInfoWindow()"
+                                    style="
+                                        cursor:pointer;
+                                        font-weight:bold;
+                                        font-size:16px;
+                                        color:#666;
+                                    ">
+                                    ✕
+                                </span>
+
+                            </div>
+
+                            <span style="font-size:11px; color:#666;">
+                                ${
+                                    currentLanguage === "en"
+                                    ? "Closest International Healthcare Center"
+                                    : "가장 가까운 국제진료센터"
+                                }
+                            </span>
+
+                            <hr style="margin:5px 0;
+                                    border:0;
+                                    border-top:1px solid #eee;">
+
+                            🗣️ <b>
+                                ${translations[currentLanguage].infoSupport}
+                            </b><br>
+
+                            ${convertLanguage(item.lang)}
+
+                            ${marker.isNearest ? `
+
+                            <hr style="margin:5px 0;
+                            border:0;
+                            border-top:1px solid #eee;">
+
+                            📍 <b>
+                                ${currentLanguage === "en"
+                                    ? "Distance"
+                                    : "거리"}
+                            </b><br>
+
+                            ${(routeDistance / 1000).toFixed(2)} km
+
+                            <br><br>
+
+                            🚗 <b>
+                            ${currentLanguage === "en"
+                                ? "Driving Time"
+                                : "차량 이동 시간"}
+                            </b><br>
+
+                            ${Math.ceil(carTime / 60)}
+                            ${currentLanguage === "en"
+                                ? " min"
+                                : "분"}
+
+                            <br><br>
+                            🚶 <b>
+                                ${currentLanguage === "en"
+                                    ? "Walking Time"
+                                    : "도보 시간"}
+                            </b><br>
+
+                            ${Math.ceil(routeTime / 60)}
+                            ${currentLanguage === "en"
+                                ? " min"
+                                : "분"}
+
+                            <br><br>
+
+                            ` : ""}
+
+                            <a href="${item.url}"
+                            target="_blank"
+                            style="
+                                    color:#1a73e8;
+                                    font-weight:bold;
+                                    text-decoration:none;">
+
+                                ${translations[currentLanguage].infoWebsite}
+
+                            </a>
+
+                        </div>
+                    `;
+
+                    var infoWindow = new Tmapv3.InfoWindow({
+                        position: new Tmapv3.LatLng(
+                            item.lat,
+                            item.lng
+                        ),
+                        content: content,
+                        type: 2,
+                        map: map
+                    });
+
+                    currentInfoWindow = infoWindow;
+                });
+
+                marker.customData = item;
+                marker.isNearest = false;
+                // 처음에는 지도에서 숨김
+                marker.setMap(null);
+                hospitalMarkers.push(marker);
+            });
+        }
+
+        function getDistance(lat1, lng1, lat2, lng2) {
+            var R = 6371; 
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLng = (lng2 - lng1) * Math.PI / 180;
+            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; 
+        }
+
+        function showNearestHospitalRoute() {
+            if (userPosition.lat === null || userPosition.lng === null) {
+                alert("먼저 오른쪽 지도 영역을 마우스로 클릭하여 출발지를 지정해 주세요!");
+                return;
+            }
+
+            clearRouteLines();
+            if (currentInfoWindow) currentInfoWindow.setMap(null);
+            hospitalMarkers.forEach(function(m) { m.setMap(null); });
+
+            var minDistance = Infinity;
+            var nearestMarker = null;
+
+            hospitalMarkers.forEach(function(marker) {
+                var dist = getDistance(
+                    userPosition.lat, userPosition.lng,
+                    marker.getPosition().lat(), marker.getPosition().lng()
+                );
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestMarker = marker;
+                }
+            });
+
+            if (nearestMarker) {
+                nearestMarker.isNearest = true;
+                nearestMarker.setMap(map);
+
+                var startX = userPosition.lng;
+                var startY = userPosition.lat;
+                var endX = nearestMarker.getPosition().lng();
+                var endY = nearestMarker.getPosition().lat();
+
+                var apiUrl = "https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1&format=json";
+                var headers = {
+                    "appKey": tmapAppKey,
+                    "Content-Type": "application/json"
+                };
+                var bodyData = JSON.stringify({
+                    "startX": startX.toString(),
+                    "startY": startY.toString(),
+                    "endX": endX.toString(),
+                    "endY": endY.toString(),
+                    "startName": "출발지",
+                    "endName": nearestMarker.customData.name
+                });
+
+                fetch(apiUrl, {
+                    method: "POST",
+                    headers: headers,
+                    body: bodyData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 🌟 [에러창 문제 해결] 데이터 바인딩 오류 예외 조건문 리팩토링
+                    if(!data.features || data.features.length === 0) {
+                        alert("경로 데이터를 가져오지 못했습니다. API 키 권한을 확인하세요.");
+                        return;
+                    }
+                    
+                    routeDistance =
+                    data.features[0].properties.totalDistance;
+
+                    routeTime =
+                        data.features[0].properties.totalTime;
+
+                    /* 차량 시간 조회 */
+                    fetch(
+                        "https://apis.openapi.sk.com/tmap/routes?version=1&format=json",
+                        {
+                            method: "POST",
+                            headers: {
+                                "appKey": tmapAppKey,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                startX: startX.toString(),
+                                startY: startY.toString(),
+                                endX: endX.toString(),
+                                endY: endY.toString(),
+                                reqCoordType: "WGS84GEO",
+                                resCoordType: "WGS84GEO",
+                                searchOption: "0"
+                            })
+                        }
+                    )
+                    .then(res => res.json())
+                    .then(carData => {
+
+                        carTime =
+                            carData.features[0].properties.totalTime;
+
+                        drawRealRoute(data.features);
+
+                        map.setCenter(nearestMarker.getPosition());
+                        map.setZoom(13);
+
+                        nearestMarker.trigger("click");
+
+                    })
+                    .catch(err => {
+
+                        console.error("차량 경로 조회 실패", err);
+
+                        drawRealRoute(data.features);
+
+                        map.setCenter(nearestMarker.getPosition());
+                        map.setZoom(13);
+
+                        nearestMarker.trigger("click");
+
+                    });
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                });
+            }
+        }
+
+        function drawRealRoute(features) {
+            features.forEach(function(feature) {
+                if (feature.geometry.type === "LineString") {
+                    var pathCoords = [];
+                    feature.geometry.coordinates.forEach(function(coord) {
+                        pathCoords.push(new Tmapv3.LatLng(coord[1], coord[0]));
+                    });
+
+                    var polyline = new Tmapv3.Polyline({
+                        path: pathCoords,
+                        strokeColor: "#002b87", 
+                        strokeOpacity: 0.9,
+                        strokeWeight: 6,
+                        map: map
+                    });
+                    routePolylines.push(polyline);
+                }
+                // 'Point' 데이터가 통과할 때 뜨던 예외 catch/alert 블록을 완전히 삭제했습니다.
+            });
+        }
+
+        function showAllHospitals() {
+            clearMapData();
+            hospitalMarkers.forEach(function(marker) {
+                marker.isNearest = false;
+                marker.setMap(map);
+            });
+            map.setCenter(new Tmapv3.LatLng(37.550000, 126.990000));
+            map.setZoom(12);
+        }
+
+        function clearRouteLines() {
+            routePolylines.forEach(function(line) { line.setMap(null); });
+            routePolylines = [];
+        }
+
+        function clearMapData() {
+            if (currentInfoWindow) { currentInfoWindow.setMap(null); currentInfoWindow = null; }
+            clearRouteLines();
+            hospitalMarkers.forEach(function(marker) { marker.setMap(null); });
+            if (userMarker) { userMarker.setMap(null); userMarker = null; }
+            userPosition = { lat: null, lng: null };
+        }
+    </script>
+</head>
+<body onload="initTmap(); changeLanguage('en');">
+
+    <div class="header">
+            <div id="headerTitle">
+        Closest International Healthcare Center Navigation
+            </div>
+
+            <div class="language-toggle">
+
+                <span onclick="changeLanguage('en')"
+                    id="langEN"
+                    class="active-lang">
+                    EN
+                </span>
+
+                <span>|</span>
+
+                <span onclick="changeLanguage('ko')"
+                    id="langKO">
+                    KO
+                </span>
+
+            </div>
+
+        </div>
+
+    <div class="container">
+
+        <div class="sidebar">
+            
+            <h3 id="guideTitle">대피 경로 안내</h3>
+            <div class="notice-box" id="noticeBox">
+                📍 사용 방법:<br>
+                1. 처음 진입 시 내 위치 마커가 없습니다.<br>
+                2. 지도에서 우클릭하여 출발지를 지정하세요.<br>
+                3. 아래 버튼을 눌러 가장 가까운 병원을 찾으세요.
+            </div>
+
+            <button id="findRouteBtn" class="primary" onclick="showNearestHospitalRoute()">🚨 실제 도로 기준 최단 병원 찾기</button>
+            <button id="showAllBtn" onclick="showAllHospitals()">📋 전체 지정병원 보기</button>
+            <button id="resetBtn" class="danger" onclick="clearMapData()">🔄 지도 및 위치 전체 초기화</button>
+            
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
+            
+            <h3 id="mapControlTitle">지도 제어</h3>
+            <button id="zoomInBtn" onclick="zoomIn()">지도 확대</button>
+            <button id="zoomOutBtn" onclick="zoomOut()">지도 축소</button>
+            <button id="darkModeBtn" onclick="toggleDark()">야간 모드 (필터)</button>
+        </div>
+
+        <div id="map_div"></div>
+
+    </div>
+
+    <script>
+        const mapElement = document.getElementById('map_div');
+        function zoomIn() { if(map) map.setZoom(map.getZoom() + 1); }
+        function zoomOut() { if(map) map.setZoom(map.getZoom() - 1); }
+        function toggleDark() {
+            if (mapElement.style.filter === 'brightness(0.5)') {
+                mapElement.style.filter = 'none';
+            } else {
+                mapElement.style.filter = 'brightness(0.5)';
+            }
+        }
+    </script>
+</body>
+</html>
